@@ -204,6 +204,13 @@ bool WireguardUtilsMacos::deleteInterface() {
   }
 
   if (m_tunnel.state() == QProcess::NotRunning) {
+    // The tunnel process is already gone -- it crashed, was killed, or the
+    // interface was removed out from under it. Returning here without dropping
+    // the firewall leaves the kill switch rules loaded with no tunnel to
+    // protect, so the user is left with no network and no way to clear it from
+    // the UI. There is no traffic left to leak at this point, so it is safe to
+    // tear the firewall down now.
+    KillSwitch::instance()->disableKillSwitch();
     return false;
   }
 
