@@ -55,8 +55,28 @@ set(LIBS ${LIBS}
 
 find_package(Qt6 QUIET OPTIONAL_COMPONENTS CorePrivate)
 if(TARGET Qt6::CorePrivate)
-    set(LIBS ${LIBS} Qt6::CorePrivate)
-    add_compile_definitions(AMNEZIA_HAS_QZIPWRITER)
+    # Distro Qt can define Qt6::CorePrivate without shipping the private headers
+    # (Debian/Ubuntu split them into qt6-base-private-dev). Linking the target then
+    # fails at generate time on a non-existent include path, so check the header too.
+    # Qt 6.4 also keeps qzipwriter_p.h in QtGui, not QtCore, so the target alone is
+    # not enough there either.
+    get_target_property(_qt_core_includes Qt6::Core INTERFACE_INCLUDE_DIRECTORIES)
+    set(_qt_private_hints "")
+    foreach(_dir IN LISTS _qt_core_includes)
+        list(APPEND _qt_private_hints "${_dir}/${Qt6Core_VERSION}")
+    endforeach()
+    find_path(QT6_QZIPWRITER_INCLUDE_DIR
+        NAMES QtCore/private/qzipwriter_p.h
+        HINTS ${_qt_private_hints}
+        NO_DEFAULT_PATH
+    )
+    if(QT6_QZIPWRITER_INCLUDE_DIR)
+        set(LIBS ${LIBS} Qt6::CorePrivate)
+        add_compile_definitions(AMNEZIA_HAS_QZIPWRITER)
+    else()
+        message(STATUS "Qt6::CorePrivate is defined but QtCore/private/qzipwriter_p.h "
+                       "was not found; building log export without QZipWriter")
+    endif()
 endif()
 
 if(WIN32 OR (APPLE AND NOT IOS) OR (LINUX AND NOT ANDROID))
